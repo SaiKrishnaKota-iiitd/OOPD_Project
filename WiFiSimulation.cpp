@@ -87,6 +87,7 @@ void WiFi4Simulation::printSimulationResults() {
               << m_accessPoint.calculateMaxThroughput() << " Mbps\n";
 
     float avg_latency = 0.0;
+    float max_latency = 0.0;
     // Calculate latency for each user
     for (const auto& user : m_users) {
         const auto& transmissionTimes = user.getTransmissionTimes();
@@ -95,10 +96,12 @@ void WiFi4Simulation::printSimulationResults() {
             auto totalLatency = std::chrono::duration_cast<std::chrono::microseconds>(
                 transmissionTimes.back() - transmissionTimes.front()
             ).count();
+            max_latency = max_latency > (totalLatency / transmissionTimes.size()) ? max_latency : (totalLatency / transmissionTimes.size());
             avg_latency += totalLatency / transmissionTimes.size();
             // std::cout << user.getId() << " Average Latency: " 
             //           << (totalLatency / transmissionTimes.size()) << " microseconds\n";
         }
     }
-    std::cout<< "Average Latency of "<< m_users.size() << " Users: " << avg_latency / m_users.size() << " microseconds\n"; 
+    std::cout<< "Average Latency of "<< m_users.size() << " Users: " << avg_latency / m_users.size() << " microseconds\n";
+    std::cout<< "Max Latency of "<< m_users.size() << " Users: " << max_latency << " microseconds\n";
 }

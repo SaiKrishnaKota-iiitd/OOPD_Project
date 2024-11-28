@@ -144,16 +144,32 @@ class WiFiSimulation{
 };
 
 // WiFi Simulation Class
-class WiFi4Simulation : public WiFiSimulation {
-private:
-    AccessPoint m_accessPoint;
+// class WiFi4Simulation : public WiFiSimulation {
+// private:
+//     AccessPoint m_accessPoint;
+//     std::vector<User> m_users;
+
+// public:
+//     WiFi4Simulation(size_t userCount, const std::string& apId = "AP1");
+
+//     void runSimulation();
+//     void printSimulationResults();
+// };
+
+class WiFi4Simulation {
+protected:
+    // Make m_users protected to allow access in derived classes
     std::vector<User> m_users;
+    AccessPoint m_accessPoint;
 
 public:
     WiFi4Simulation(size_t userCount, const std::string& apId = "AP1");
 
-    void runSimulation();
-    void printSimulationResults();
-};
+    // Getter for users
+    std::vector<User>& getUsers() { return m_users; }
+    const std::vector<User>& getUsers() const { return m_users; }
 
+    virtual void runSimulation();
+    virtual void printSimulationResults();
+};
 #endif // WIFI4_SIMULATION_H
