@@ -1,81 +1,159 @@
 #ifndef WIFI_SIMULATION_H
-#define WIFI_SIMULATION_H
+#define __WIFI_SIMULATION_H
 
-#include <iostream>
 #include <vector>
 #include <queue>
 #include <random>
 #include <chrono>
-#include <numeric>
-#include <limits>
+#include <stdexcept>
+#include <memory>
+#include <iostream>
+#include <cmath>
 
-// Base frequency class
-class BaseFrequency {
-public:
-    virtual double getBandwidth() const = 0;
-    virtual ~BaseFrequency() = default;
-};
-
-// Template class for specific frequency
+// Forward declarations
 template <typename T>
-class Frequency : public BaseFrequency {
-    T bandwidth;
+class Packet;
 
+template <typename T>
+class FrequencyChannel;
+
+class User;
+class AccessPoint;
+
+// Exception class for WiFi simulation errors
+class WiFiSimulationException : public std::runtime_error {
 public:
-    explicit Frequency(T bw) : bandwidth(bw) {}
-    double getBandwidth() const override { return static_cast<double>(bandwidth); }
+    explicit WiFiSimulationException(const std::string& message)
+        : std::runtime_error(message) {}
 };
 
-// Packet class
+// Abstract base class for network entities
+class NetworkEntity {
+protected:
+    std::string m_id;
+
+public:
+    NetworkEntity(const std::string& id) : m_id(id) {}
+    virtual ~NetworkEntity() = default;
+    std::string getId() const { return m_id; }
+};
+
+// Packet Template Class
+template <typename T>
 class Packet {
-public:
-    int size; // in bytes
-    double transmissionTime; // Time taken to transmit this packet
+private:
+    T m_data;
+    size_t m_size;  // in KB
+    std::chrono::steady_clock::time_point m_creationTime;
 
-    Packet(int s, double time) : size(s), transmissionTime(time) {}
+public:
+    Packet(const T& data, size_t size = 1) 
+        : m_data(data), m_size(size), 
+          m_creationTime(std::chrono::steady_clock::now()) {}
+
+    size_t getSize() const { return m_size; }
+    auto getCreationTime() const { return m_creationTime; }
 };
 
-// User class
-class User {
-    int id;
-    double backoffTime;
-    std::queue<Packet> packetQueue;
+// Frequency Channel Template Class
+template <typename T>
+class FrequencyChannel {
+private:
+    double m_bandwidth;  // in MHz
+    bool m_isOccupied;
+    std::mt19937 m_generator;
+    std::uniform_int_distribution<> m_backoffDistribution;
 
 public:
-    explicit User(int userId) : id(userId), backoffTime(0) {}
+    FrequencyChannel(double bandwidth = 20.0) 
+        : m_bandwidth(bandwidth), 
+          m_isOccupied(false), 
+          m_generator(std::random_device{}()),
+          m_backoffDistribution(0, 15) {}
 
-    void generatePacket(BaseFrequency* frequency, double modulationRate, double codingRate);
-    Packet getNextPacket();
-    bool hasPackets() const;
-    double getBackoffTime() const;
-    void setBackoffTime(double time);
+    bool isChannelFree() const { return !m_isOccupied; }
+    void occupy() { m_isOccupied = true; }
+    void release() { m_isOccupied = false; }
+
+    int getBackoffTime() {
+        return m_backoffDistribution(m_generator);
+    }
+
+    double getBandwidth() const { return m_bandwidth; }
 };
 
-// Access Point class
-class AccessPoint {
-    std::vector<User*> users;
-    bool channelFree;
+// User Class
+class User : public NetworkEntity {
+private:
+    std::queue<Packet<std::string>> m_packetQueue;
+    std::vector<std::chrono::steady_clock::time_point> m_transmissionTimes;
 
 public:
-    explicit AccessPoint() : channelFree(true) {}
-    void connectUser(User* user);
-    bool isChannelFree() const;
-    void setChannelFree(bool status);
-    void simulateTransmission(double& throughput, double& avgLatency, double& maxLatency);
+    User(const std::string& id) : NetworkEntity(id) {}
+
+    void addPacket(const Packet<std::string>& packet) {
+        m_packetQueue.push(packet);
+    }
+
+    bool hasPackets() const { return !m_packetQueue.empty(); }
+    Packet<std::string> getNextPacket();
+
+    void recordTransmissionTime(const std::chrono::steady_clock::time_point& time) {
+        m_transmissionTimes.push_back(time);
+    }
+
+    const std::vector<std::chrono::steady_clock::time_point>& getTransmissionTimes() const {
+        return m_transmissionTimes;
+    }
 };
 
-// Simulation Utility
-class WiFiSimulation {
-    BaseFrequency* frequency;
-    AccessPoint accessPoint;
-    int numUsers;
+// Access Point Class
+class AccessPoint : public NetworkEntity {
+private:
+    FrequencyChannel<std::string> m_channel;
+    std::vector<User*> m_connectedUsers;
+    std::mt19937 m_generator;
+    std::uniform_real_distribution<> m_probabilityDistribution;
+
+    // Modulation and coding parameters
+    const int m_modulationOrder = 256;  // 256-QAM
+    const double m_codingRate = 5.0 / 6.0;
 
 public:
-    WiFiSimulation(BaseFrequency* freq, int users)
-        : frequency(freq), numUsers(users) {}
+    AccessPoint(const std::string& id) 
+        : NetworkEntity(id), 
+          m_channel(20.0),
+          m_generator(std::random_device{}()),
+          m_probabilityDistribution(0.0, 1.0) {}
 
-    void setupSimulation();
+    void addUser(User* user) {
+        m_connectedUsers.push_back(user);
+    }
+
+    FrequencyChannel<std::string>& getChannel() { return m_channel; }
+
+    double calculateMaxThroughput() const;
+    
+    bool tryTransmit(User* user);
+};
+
+class WiFiSimulation{
+    public:
+        virtual void runSimulation()=0;
+        virtual void printSimulationResults()=0;
+};
+
+// WiFi Simulation Class
+class WiFi4Simulation : public WiFiSimulation {
+private:
+    AccessPoint m_accessPoint;
+    std::vector<User> m_users;
+
+public:
+    WiFi4Simulation(size_t userCount, const std::string& apId = "AP1");
+
     void runSimulation();
+    void printSimulationResults();
 };
 
-#endif // WIFI_SIMULATION_H
+#endif // WIFI4_SIMULATION_H
